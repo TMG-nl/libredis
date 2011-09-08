@@ -79,6 +79,7 @@ void ReplyParser_free(ReplyParser *rp)
  * 	       0->5->6->7->8 => nil bulk reply ($-1\r\n)
  * 		   0->5->9->10->11->12 => bulk reply ($5\r\nblaat\r\n)
  * 		   0->13->14->15->16 => nil multibulk reply (*-1\r\n)
+ * 		   0->13->17->16 => nil multibulk reply (*0\r\n)
  * 		   0->13->17->18 => multibulk reply (*3\r\n (... bulk replies ...)
  * 		   0->19->20 => integer reply (:42\r\n)
  * Note that it is not a 'pure' state machine (from a language theory perspective), e.g. some additional state is kept to
@@ -347,9 +348,15 @@ ReplyParserResult ReplyParser_execute(ReplyParser *rp, Buffer *buffer, size_t le
             case 17: {
                 if(c == CR) { //end of digits
                     rp->multibulk_count = atoi(Buffer_data(buffer) + rp->mark);
-                    rp->multibulk_reply = Reply_new(RT_MULTIBULK, NULL, 0, rp->multibulk_count);
-                    rp->p++;
-                    rp->cs = 18;
+                    if(rp->multibulk_count == 0) {
+                        rp->p++;
+                        rp->cs = 16;
+                    }
+                    else {
+                        rp->multibulk_reply = Reply_new(RT_MULTIBULK, NULL, 0, rp->multibulk_count);
+                        rp->p++;
+                        rp->cs = 18;
+                    }
                     continue;
                 }
                 else if(isdigit(c)) { //one more digit
@@ -362,12 +369,6 @@ ReplyParserResult ReplyParser_execute(ReplyParser *rp, Buffer *buffer, size_t le
                 if(c == LF) {
                     rp->p++;
                     rp->cs = 0;
-	            if(rp->multibulk_count == 0) {
-			//multi bulk reply with 0 entries
-                	*reply = rp->multibulk_reply;
-                	rp->multibulk_reply = NULL;
-                	return RPR_REPLY;
-                    }
                     continue;
                 }
                 break;

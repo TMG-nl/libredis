@@ -1,3 +1,30 @@
+The project has been adapted to support autconf/automake builds
+
+== C Library ==
+
+autoreconf --install
+./configure
+make 
+make install
+
+# To create a distributable (with a filled changelog and everything) run make dist-gzip
+# This tar.gz can be used in conjunction with a gentoo ebuild i.e.
+
+== PHP Extension ==
+
+cd php/ext/libredis
+phpize
+./configure
+make 
+make install
+
+----------------------------------------------------------------------------------------
+
+The old way of compiling as documented below can still be used by moving Makefile.old to 
+Makefile and following below procedures
+
+To install libredis C library
+
 == PHP EXTENSION ==
 
 sudo make php_ext 

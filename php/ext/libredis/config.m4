@@ -17,50 +17,60 @@ dnl Make sure that the comment is aligned:
 dnl [  --enable-libredis           Enable libredis support])
 
 if test "$PHP_LIBREDIS" != "no"; then
-  dnl Write more examples of tests here...
+	dnl # --with-libredis -> check with-path
+	SEARCH_PATH="/usr/local /usr"     # you might want to change this
+	SEARCH_FOR="/include/libredis/redis.h"  # you most likely want to change this
+	
+	if test -r $PHP_LIBREDIS/$SEARCH_FOR; then # path given as parameter
+    	LIBREDIS_DIR=$PHP_LIBREDIS
+		dnl # --with-libredis -> add include path
+        PHP_ADD_INCLUDE($LIBREDIS_DIR/include)
 
-  dnl # --with-libredis -> check with-path
-  SEARCH_PATH="/usr/local /usr"     # you might want to change this
-  SEARCH_FOR="/libredis/redis.h"  # you most likely want to change this
-  if test -r $PHP_LIBREDIS/$SEARCH_FOR; then # path given as parameter
-     LIBREDIS_DIR=$PHP_LIBREDIS
-  else # search default path list
-     AC_MSG_CHECKING([for libredis files in default path])
-    for i in $SEARCH_PATH ; do
-       if test -r $i/$SEARCH_FOR; then
-         LIBREDIS_DIR=$i
-         AC_MSG_RESULT(found in $i)
-       fi
-     done
-  fi
-  
-  if test -z "$LIBREDIS_DIR"; then
-     AC_MSG_RESULT([not found])
-     AC_MSG_ERROR([Please reinstall the libredis distribution])
-  fi
+		dnl # --with-libredis -> check for lib and symbol presence
+		LIBNAME=redis # you may want to change this
+		LIBSYMBOL=Module_new # you most likely want to change this
 
-  dnl # --with-libredis -> add include path
-  PHP_ADD_INCLUDE($LIBREDIS_DIR/libredis)
+		PHP_CHECK_LIBRARY($LIBNAME,$LIBSYMBOL,
+		[
+			PHP_ADD_LIBRARY_WITH_PATH($LIBNAME, $LIBREDIS_DIR/lib, LIBREDIS_SHARED_LIBADD)
+			AC_DEFINE(HAVE_LIBREDISLIB, 1, [whether libredis exists on the system])
+		],[
+			AC_MSG_ERROR([wrong libredis lib version or lib not found])
+		],[
+			-L$LIBREDIS_DIR/lib -lm -ldl -lrt
+        ])
+	else #we look using pkg-config which is much nicer 
+		AC_MSG_CHECKING(for pkg-config)
+		if test ! -f "$PKG_CONFIG"; then
+			PKG_CONFIG=`which pkg-config`
+		fi
 
-  dnl # --with-libredis -> check for lib and symbol presence
-  dnl LIBNAME=libredis # you may want to change this
-  dnl LIBSYMBOL=libredis # you most likely want to change this 
+		if test -f "$PKG_CONFIG"; then
+			AC_MSG_RESULT(found)
+			AC_MSG_CHECKING(for libredis)
 
-  dnl PHP_CHECK_LIBRARY($LIBNAME,$LIBSYMBOL,
-  dnl [
-  dnl   PHP_ADD_LIBRARY_WITH_PATH($LIBNAME, $LIBREDIS_DIR/lib, LIBREDIS_SHARED_LIBADD)
-  dnl   AC_DEFINE(HAVE_LIBREDISLIB,1,[ ])
-  dnl ],[
-  dnl   AC_MSG_ERROR([wrong libredis lib version or lib not found])
-  dnl ],[
-  dnl   -L$LIBREDIS_DIR/lib -lm -ldl
-  dnl ])
+			if $PKG_CONFIG --exists libredis; then
+				libredis_version_full=`$PKG_CONFIG --modversion libredis`
+				AC_MSG_RESULT([found $libredis_version_full])
+				LIBREDIS_LIBS="$LDFLAGS `$PKG_CONFIG --libs libredis`"
+				LIBREDIS_INCS="$CFLAGS `$PKG_CONFIG --cflags libredis`"
+				LIBREDIS_PREFIX="`$PKG_CONFIG --variable=prefix libredis`"
+				PHP_EVAL_INCLINE($LIBREDIS_INCS)
+				PHP_EVAL_LIBLINE($LIBREDIS_LIBS, LIBREDIS_SHARED_LIBADD)
+				AC_DEFINE(HAVE_LIBREDIS, 1, [whether libredis exists on the system])
+			else
+				AC_MSG_RESULT(not found)
+				AC_MSG_ERROR(Ooops! no libredis detected!)
+			fi
+		else
+			AC_MSG_RESULT(not found)
+			AC_MSG_ERROR(Ooops! no pkg-config detected!)
+		fi
+	fi
 
-  PHP_SUBST(LIBREDIS_SHARED_LIBADD)
+	PHP_SUBST(LIBREDIS_SHARED_LIBADD)
 
-  CFLAGS="-std=gnu99 $CFLAGS -pedantic -Wall -DNDEBUG"
+	CFLAGS="-std=gnu99 $CFLAGS -pedantic -Wall -DNDEBUG -fvisibility=hidden"
 
-  PHP_ADD_LIBRARY(rt,, LIBREDIS_SHARED_LIBADD)
-
-  PHP_NEW_EXTENSION(libredis, libredis.c batch.c connection.c ketama.c md5.c module.c parser.c buffer.c, $ext_shared)
+	PHP_NEW_EXTENSION(libredis, libredis.c, $ext_shared)
 fi

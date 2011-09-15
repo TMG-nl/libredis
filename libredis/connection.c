@@ -618,7 +618,7 @@ void Executor_notify_event(Executor *executor, Connection *connection, EventType
 		executor->numevents += 1;
 	}
 
-	DEBUG(("executor notify event added: fd: %d, type: %c, max_fd: %d, num_events: %d\n", connection->sockfd, event == EVENT_READ ? 'R' : 'W', executor->max_fd, executor->numevents));
+	DEBUG(("executor notify event added: fd: %d, type: %c, num_events: %d\n", connection->sockfd, event == EVENT_READ ? 'R' : 'W', executor->numevents));
 }
 
 

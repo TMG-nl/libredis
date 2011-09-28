@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.63])
-AC_INIT([libredis], [0.8], [henk@hyves.nl])
+AC_INIT([libredis], [0.9], [henk@hyves.nl])
 AM_INIT_AUTOMAKE([1.10 gnu])
 AC_CONFIG_SRCDIR([libredis/config.h.in])
 AC_CONFIG_HEADERS([libredis/config.h])

@@ -11,7 +11,6 @@ AC_CONFIG_MACRO_DIR([m4])
 LT_INIT
 AC_SUBST([LIBTOOL_DEPS])
 
-LIBREDIS_RELEASE=0:0:8
 LIBREDIS_LIBRARY_VERSION=1:0:0
 #                        | | |
 #                 +------+ | +---+
@@ -24,7 +23,6 @@ LIBREDIS_LIBRARY_VERSION=1:0:0
 #                 |        +- increment if source code has changed
 #                 |           set to zero if current is incremented
 #                 +- increment if interfaces have been added, removed or changed
-AC_SUBST(LIBREDIS_RELEASE)
 AC_SUBST(LIBREDIS_LIBRARY_VERSION)
 
 # Checks for programs.

@@ -15,5 +15,4 @@ libredis_la_SOURCES = redis.h alloc.h batch.c batch.h buffer.c \
 
 libredis_la_CFLAGS = ${AM_CFLAGS} $(LIBS) -std=gnu99
 libredis_la_LDFLAGS = ${AM_LDFLAGS} -version-info \
-                               $(LIBREDIS_LIBRARY_VERSION) \
-                               -release $(LIBREDIS_RELEASE)
+                               $(LIBREDIS_LIBRARY_VERSION) 

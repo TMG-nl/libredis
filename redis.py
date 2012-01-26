@@ -10,6 +10,35 @@ elif '--release' in sys.argv:
 else:
     libredis = cdll.LoadLibrary("lib/libredis.so")
 
+# Set libredis c-library function parameters and return types (needed to make this work on 64bit):
+libredis.Module_new.restype = c_void_p
+libredis.Module_init.argtypes = [c_void_p]
+libredis.Executor_new.restype = c_void_p
+libredis.Executor_add.argtypes = [c_void_p, c_void_p, c_void_p]
+libredis.Executor_execute.restype = c_int
+libredis.Executor_execute.argtypes = [c_void_p, c_int]
+libredis.Executor_free.argtypes = [c_void_p]
+libredis.Connection_new.argtypes = [c_char_p]
+libredis.Connection_free.argtypes = [c_void_p]
+libredis.Batch_new.restype = c_void_p
+libredis.Batch_write.argtypes = [c_void_p, c_char_p, c_ulong, c_int]
+#libredis.Batch_write_buffer.restype = c_void_p
+#libredis.Batch_write_buffer.argtypes = [c_void_p]
+libredis.Batch_free.argtypes = [c_void_p]
+libredis.Batch_next_reply.argtypes = [c_void_p, c_void_p, POINTER(c_char_p), POINTER(c_ulong)]
+#libredis.Buffer_dump.argtypes = [c_void_p, c_ulong]
+libredis.Ketama_new.restype = c_void_p
+libredis.Ketama_add_server.restype = c_int
+libredis.Ketama_add_server.argtypes = [c_void_p, c_char_p, c_int, c_ulong]
+libredis.Ketama_create_continuum.argtypes = [c_void_p]
+#libredis.Ketama_print_continuum.argtypes = [c_void_p]
+libredis.Ketama_get_server_ordinal.restype = c_int
+libredis.Ketama_get_server_ordinal.argtypes = [c_void_p, c_char_p, c_ulong]
+libredis.Ketama_get_server_address.restype = c_char_p
+libredis.Ketama_get_server_address.argtypes = [c_void_p, c_int]
+libredis.Ketama_free.argtypes = [c_void_p]
+
+
 g_module = libredis.Module_new()
 libredis.Module_init(g_module)
 def g_Module_free():
@@ -92,16 +121,16 @@ class Reply(object):
     def from_next(cls, batch, raise_exception_on_error = True):
         data = c_char_p()
         rt = c_int()
-        len = c_int()
-        libredis.Batch_next_reply(batch._batch, byref(rt),byref(data), byref(len))
+        datalen = c_ulong()
+        libredis.Batch_next_reply(batch._batch, byref(rt),byref(data), byref(datalen))
         type = rt.value
         #print repr(type)
         if type in [cls.RT_OK, cls.RT_ERROR, cls.RT_BULK]:
-            value = string_at(data, len)
+            value = string_at(data, datalen.value)
             if type == cls.RT_ERROR and raise_exception_on_error:
                 raise RedisError(value)
         elif type in [cls.RT_MULTIBULK]:
-            value = len
+            value = datalen.value
         else:
             assert False
         return Reply(type, value)
@@ -111,31 +140,42 @@ class Buffer(object):
     def __init__(self, buffer):
         self._buffer = buffer
         
-    def dump(self, limit = 64):
-        libredis.Buffer_dump(self._buffer, limit)
-        
+    #def dump(self, limit = 64):
+    #    libredis.Buffer_dump(self._buffer, limit)
+
 class Batch(object):
     def __init__(self, cmd = '', nr_commands = 0):
         self._batch = libredis.Batch_new()
         if cmd or nr_commands:
             self.write(cmd, nr_commands)
+
+    @classmethod
+    def constructUnifiedRequest(cls, argList):
+        req = '*%d\r\n' % (len(argList))
+        for arg in argList:
+            argStr = str(arg)
+            req += '$%d\r\n%s\r\n' % (len(argStr), argStr)
+        return req
             
     def write(self, cmd = '', nr_commands = 0):
         libredis.Batch_write(self._batch, cmd, len(cmd), nr_commands)
         return self
     
     def get(self, key): 
-        return self.write("GET %s\r\n" % key, 1)
+        req = Batch.constructUnifiedRequest(('GET', key))
+        return self.write(req, 1)
 
     def set(self, key, value):
-        return self.write("SET %s %d\r\n%s\r\n" % (key, len(value), value), 1)
+        req = Batch.constructUnifiedRequest(('SET', key, value))
+        return self.write(req, 1)
     
     def next_reply(self):
         return Reply.from_next(self)
 
-    @property
-    def write_buffer(self):
-        return Buffer(libredis.Batch_write_buffer(self._batch))
+    # -- Disabled for now.
+    #@property
+    #def write_buffer(self):
+    #    return Buffer(libredis.Batch_write_buffer(self._batch))
         
     def free(self):
         libredis.Batch_free(self._batch)
@@ -146,8 +186,6 @@ class Batch(object):
             self.free()
 
 class Ketama(object):
-    libredis.Ketama_get_server_address.restype = c_char_p
-    
     def __init__(self):
         self._ketama = libredis.Ketama_new()
 
@@ -157,8 +195,8 @@ class Ketama(object):
     def create_continuum(self):
         libredis.Ketama_create_continuum(self._ketama)
 
-    def print_continuum(self):
-        libredis.Ketama_print_continuum(self._ketama)
+    #def print_continuum(self):
+    #    libredis.Ketama_print_continuum(self._ketama)
 
     def get_server_ordinal(self, key):
         return libredis.Ketama_get_server_ordinal(self._ketama, key, len(key))
@@ -196,32 +234,33 @@ class Redis(object):
     
     def mget(self, *keys, **kwargs):
         timeout_ms = kwargs.get('timeout_ms', DEFAULT_TIMEOUT_MS)
-        batches = {}
+        batchKeyLists = {}
         #add all keys to batches
         for key in keys:
             server_ip = self.server_hash.get_server_address(self.server_hash.get_server_ordinal(key))
-            batch = batches.get(server_ip, None)
-            if batch is None: #new batch
-                batch = Batch("MGET")
-                batch.keys = []
-                batches[server_ip] = batch
-            batch.write(" %s" % key)
-            batch.keys.append(key)
+            batchKeyList = batchKeyLists.get(server_ip, None)
+            if batchKeyList is None: #new batch
+                batchKeyList = []
+                batchKeyLists[server_ip] = batchKeyList
+            batchKeyList.append(key)
         #finalize batches, and start executing
         executor = Executor()
-        for server_ip, batch in batches.items():
-            batch.write("\r\n", 1)
+        batchesWithKeys = []
+        for server_ip, batchKeyList in batchKeyLists.items():
+            batch = Batch()
+            batch.write(Batch.constructUnifiedRequest(['MGET'] + batchKeyList), 1)
             connection = self.connection_manager.get_connection(server_ip)
             executor.add(connection, batch)
+            batchesWithKeys.append((batch, batchKeyList))
         #handle events until all complete
         executor.execute(timeout_ms)
         #build up results
         results = {}
-        for batch in batches.values():
+        for (batch, keys) in batchesWithKeys:
             #only expect 1 (multibulk) reply per batch
             reply = batch.next_reply()
             assert reply.is_multibulk()
-            for key in batch.keys:
+            for key in keys:
                 child = batch.next_reply()
                 value = child.value
                 results[key] = value

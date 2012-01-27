@@ -13,6 +13,7 @@ else:
 # Set libredis c-library function parameters and return types (needed to make this work on 64bit):
 libredis.Module_new.restype = c_void_p
 libredis.Module_init.argtypes = [c_void_p]
+libredis.Module_free.argtypes = [c_void_p]
 libredis.Executor_new.restype = c_void_p
 libredis.Executor_add.argtypes = [c_void_p, c_void_p, c_void_p]
 libredis.Executor_execute.restype = c_int

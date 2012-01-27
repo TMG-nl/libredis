@@ -19,6 +19,7 @@ libredis.Executor_add.argtypes = [c_void_p, c_void_p, c_void_p]
 libredis.Executor_execute.restype = c_int
 libredis.Executor_execute.argtypes = [c_void_p, c_int]
 libredis.Executor_free.argtypes = [c_void_p]
+libredis.Connection_new.restype = c_void_p
 libredis.Connection_new.argtypes = [c_char_p]
 libredis.Connection_free.argtypes = [c_void_p]
 libredis.Batch_new.restype = c_void_p

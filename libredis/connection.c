@@ -315,7 +315,7 @@ void Connection_write_data(Connection *connection, int ordinal)
 			return;
 		}
 		if(error != 0) {
-			Connection_abort(connection, "connect error 2, errno: [%d] %s", errno, strerror(errno));
+			Connection_abort(connection, "connect error 2, error: [%d] %s", error, strerror(error));
 			return;
 		}
 		else {

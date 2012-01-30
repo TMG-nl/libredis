@@ -1,4 +1,4 @@
-from redis import *
+from libredis import *
 
 import time
 

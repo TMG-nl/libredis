@@ -3,12 +3,14 @@ import atexit
 from ctypes import *
 
 import sys
+import threading
+
 if '--debug' in sys.argv:
     libredis = cdll.LoadLibrary("Debug/libredis.so")
 elif '--release' in sys.argv:
     libredis = cdll.LoadLibrary("Release/libredis.so")
 else:
-    libredis = cdll.LoadLibrary("lib/libredis.so")
+    libredis = cdll.LoadLibrary("/usr/local/lib/libredis.so")
 
 # Set libredis c-library function parameters and return types (needed to make this work on 64bit):
 libredis.Module_new.restype = c_void_p
@@ -93,15 +95,20 @@ class Connection(object):
         if self._connection is not None:
             self.free()
 
+
 class ConnectionManager(object):
     def __init__(self):
-        self._connections = {}
+        self._connectionsByThread = {}
             
     def get_connection(self, addr):
-        if not addr in self._connections:
-            self._connections[addr] = Connection(addr)
-        return self._connections[addr]
-        
+        thread_id = threading.current_thread().ident
+        if not thread_id in self._connectionsByThread:
+            self._connectionsByThread[thread_id] = {}
+        if not addr in self._connectionsByThread[thread_id]:
+            self._connectionsByThread[thread_id][addr] = Connection(addr)
+        return self._connectionsByThread[thread_id][addr]
+
+
 class Reply(object):
     RT_ERROR = -1
     RT_NONE = 0
@@ -133,6 +140,8 @@ class Reply(object):
                 raise RedisError(value)
         elif type in [cls.RT_MULTIBULK]:
             value = datalen.value
+        elif type in [cls.RT_BULK_NIL]:
+            value = None
         else:
             assert False
         return Reply(type, value)
@@ -167,8 +176,12 @@ class Batch(object):
         req = Batch.constructUnifiedRequest(('GET', key))
         return self.write(req, 1)
 
-    def set(self, key, value):
-        req = Batch.constructUnifiedRequest(('SET', key, value))
+    def set(self, key, value, expire = None):
+        req = ''
+        if expire:
+            req = Batch.constructUnifiedRequest(('SETEX', key, value, expire))
+        else:
+            req = Batch.constructUnifiedRequest(('SET', key, value))
         return self.write(req, 1)
     
     def next_reply(self):
@@ -224,15 +237,18 @@ class Redis(object):
         connection = self.connection_manager.get_connection(server_addr)
         return connection._execute_simple(batch, timeout_ms)
         
-    def set(self, key, value, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
+    def setex(self, key, expire, value):
+        return self.set(key, value, expire)
+        
+    def set(self, key, value, expire = None, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
         if server_key is None: server_key = key
-        batch = Batch().set(key, value)
-        return self._execute_simple(batch, server_key)
+        batch = Batch().set(key, value, expire)
+        return self._execute_simple(batch, server_key, timeout_ms)
     
     def get(self, key, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
         if server_key is None: server_key = key
         batch = Batch().get(key)
-        return self._execute_simple(batch, server_key)
+        return self._execute_simple(batch, server_key, timeout_ms)
     
     def mget(self, *keys, **kwargs):
         timeout_ms = kwargs.get('timeout_ms', DEFAULT_TIMEOUT_MS)

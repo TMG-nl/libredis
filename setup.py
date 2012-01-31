@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(name='pylibredis',
-      py_modules=['pylibredis/libredis'],
+      packages=find_packages(),
       version='0.0.1' # Dummy version number for now.
      )

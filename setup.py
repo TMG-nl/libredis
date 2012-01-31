@@ -3,7 +3,6 @@
 from setuptools import setup
 
 setup(name='pylibredis',
-      py_modules=['libredis.py'],
+      py_modules=['pylibredis/libredis'],
       version='0.0.1' # Dummy version number for now.
      )
-

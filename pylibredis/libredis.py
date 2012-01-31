@@ -1,16 +1,21 @@
 import atexit
 
 from ctypes import *
+from ctypes.util import find_library
 
 import sys
+import os
 import threading
 
-if '--debug' in sys.argv:
-    libredis = cdll.LoadLibrary("Debug/libredis.so")
-elif '--release' in sys.argv:
-    libredis = cdll.LoadLibrary("Release/libredis.so")
-else:
-    libredis = cdll.LoadLibrary("/usr/local/lib/libredis.so")
+# Determine the library path:
+libredisLibPath = os.environ.get('LIBREDIS_SO_PATH')
+if None == libredisLibPath:
+    libredisLibPath = find_library('redis')
+if None == libredisLibPath:
+    print('Unable to find libredis library file.')
+    sys.exit(1)
+
+libredis = cdll.LoadLibrary(libredisLibPath)
 
 # Set libredis c-library function parameters and return types (needed to make this work on 64bit):
 libredis.Module_new.restype = c_void_p

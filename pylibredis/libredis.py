@@ -17,6 +17,19 @@ if None == libredisLibPath:
 
 libredis = cdll.LoadLibrary(libredisLibPath)
 
+
+# Create ctypes Connection struct:
+class Struct_Connection(Structure):
+    _fields_ = [('addr', c_char * 255),
+                ('serv', c_char * 20),
+                ('addrinfo', c_void_p),
+                ('sockfd', c_int),
+                ('state', c_int),
+                ('current_batch', c_void_p),
+                ('current_executor', c_void_p),
+                ('parser', c_void_p)]
+
+
 # Set libredis c-library function parameters and return types (needed to make this work on 64bit):
 libredis.Module_new.restype = c_void_p
 libredis.Module_init.argtypes = [c_void_p]
@@ -26,9 +39,9 @@ libredis.Executor_add.argtypes = [c_void_p, c_void_p, c_void_p]
 libredis.Executor_execute.restype = c_int
 libredis.Executor_execute.argtypes = [c_void_p, c_int]
 libredis.Executor_free.argtypes = [c_void_p]
-libredis.Connection_new.restype = c_void_p
+libredis.Connection_new.restype = POINTER(Struct_Connection)
 libredis.Connection_new.argtypes = [c_char_p]
-libredis.Connection_free.argtypes = [c_void_p]
+libredis.Connection_free.argtypes = [POINTER(Struct_Connection)]
 libredis.Batch_new.restype = c_void_p
 libredis.Batch_write.argtypes = [c_void_p, c_char_p, c_ulong, c_int]
 #libredis.Batch_write_buffer.restype = c_void_p
@@ -56,9 +69,14 @@ atexit.register(g_Module_free)
 
 DEFAULT_TIMEOUT_MS = 3000
 
+
 class RedisError(Exception):
     pass
-    
+
+class RedisConnectionError(Exception):
+    pass
+
+
 class Executor(object):
     def __init__(self):
         self._executor = libredis.Executor_new()
@@ -76,10 +94,23 @@ class Executor(object):
     def __del__(self):
         if self._executor is not None:
             self.free()
-            
+
+
 class Connection(object):
+    # Connection states:
+    CS_CLOSED = 0
+    CS_CONNECTING = 1
+    CS_CONNECTED = 2
+    CS_ABORTED = 3
+
     def __init__(self, addr):
-        self._connection = libredis.Connection_new(addr)
+        self.addr = addr
+        self._connect()
+
+    def _connect(self):
+        self._connection = libredis.Connection_new(self.addr)
+        if not self._connection:
+            raise RedisConnectionError('Unable to connect')
 
     def get(self, key, timeout_ms = DEFAULT_TIMEOUT_MS):
         batch = Batch()
@@ -87,10 +118,27 @@ class Connection(object):
         return self._execute_simple(batch, timeout_ms)
     
     def _execute_simple(self, batch, timeout_ms):
+        if not self._connection:
+            self._connect()
         executor = Executor()
         executor.add(self, batch)
         executor.execute(timeout_ms)
-        return Reply.from_next(batch).value
+        try:
+            reply = Reply.from_next(batch).value
+        except RedisError as ex:
+            if self._getState() in (Connection.CS_CLOSED, Connection.CS_ABORTED):
+                self.free()
+                raise RedisConnectionError(ex.args[0])
+            else:
+                raise ex
+        else:
+            return reply
+
+    def _getState(self):
+        if self._connection:
+            return self._connection[0].state
+        else:
+            return Connection.CS_CLOSED
        
     def free(self):
         libredis.Connection_free(self._connection)

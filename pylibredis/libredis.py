@@ -284,24 +284,38 @@ class Redis(object):
     def __init__(self, server_hash, connection_manager):
         self.server_hash = server_hash
         self.connection_manager = connection_manager
+        self.retryCountOnConnectionError = 1
 
-    def _execute_simple(self, batch, server_key, timeout_ms = DEFAULT_TIMEOUT_MS):
+    def _execute_simple(self, requests, server_key, timeout_ms = DEFAULT_TIMEOUT_MS):
+        retryCount = int(self.retryCountOnConnectionError)
         server_addr = self.server_hash.get_server_address(self.server_hash.get_server_ordinal(server_key))
         connection = self.connection_manager.get_connection(server_addr)
-        return connection._execute_simple(batch, timeout_ms)
+        while True:
+            batch = Batch()
+            for req in requests:
+                batch.write(req, 1)
+            try:
+                return connection._execute_simple(batch, timeout_ms)
+            except RedisConnectionError as ex:
+                retryCount -= 1
+                if retryCount < 0:
+                    raise ex
         
     def setex(self, key, expire, value):
         return self.set(key, value, expire)
         
     def set(self, key, value, expire = None, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
         if server_key is None: server_key = key
-        batch = Batch().set(key, value, expire)
-        return self._execute_simple(batch, server_key, timeout_ms)
+        if expire:
+            req = Batch.constructUnifiedRequest(('SETEX', key, value, expire))
+        else:
+            req = Batch.constructUnifiedRequest(('SET', key, value))
+        return self._execute_simple((req,), server_key, timeout_ms)
     
     def get(self, key, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
         if server_key is None: server_key = key
-        batch = Batch().get(key)
-        return self._execute_simple(batch, server_key, timeout_ms)
+        req = Batch.constructUnifiedRequest(('GET', key))
+        return self._execute_simple((req,), server_key, timeout_ms)
     
     def mget(self, *keys, **kwargs):
         timeout_ms = kwargs.get('timeout_ms', DEFAULT_TIMEOUT_MS)

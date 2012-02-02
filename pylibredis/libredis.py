@@ -307,7 +307,7 @@ class Redis(object):
     def set(self, key, value, expire = None, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
         if server_key is None: server_key = key
         if expire:
-            req = Batch.constructUnifiedRequest(('SETEX', key, value, expire))
+            req = Batch.constructUnifiedRequest(('SETEX', key, expire, value))
         else:
             req = Batch.constructUnifiedRequest(('SET', key, value))
         return self._execute_simple((req,), server_key, timeout_ms)

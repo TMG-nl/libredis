@@ -9,11 +9,10 @@ import threading
 
 # Determine the library path:
 libredisLibPath = os.environ.get('LIBREDIS_SO_PATH')
-if None == libredisLibPath:
+if libredisLibPath is None:
     libredisLibPath = find_library('redis')
-if None == libredisLibPath:
-    print('Unable to find libredis library file.')
-    sys.exit(1)
+    if libredisLibPath is None:
+        raise ImportError('No libredis library available')
 
 libredis = cdll.LoadLibrary(libredisLibPath)
 

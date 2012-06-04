@@ -194,6 +194,8 @@ class Reply(object):
             value = datalen.value
         elif type in [cls.RT_BULK_NIL]:
             value = None
+        elif type in [cls.RT_INTEGER]:
+            value = int(string_at(data, datalen.value))
         else:
             assert False
         return Reply(type, value)
@@ -314,6 +316,16 @@ class Redis(object):
     def get(self, key, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
         if server_key is None: server_key = key
         req = Batch.constructUnifiedRequest(('GET', key))
+        return self._execute_simple((req,), server_key, timeout_ms)
+    
+    def exists(self, key, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
+        if server_key is None: server_key = key
+        req = Batch.constructUnifiedRequest(('EXISTS', key))
+        return self._execute_simple((req,), server_key, timeout_ms)
+    
+    def delete(self, key, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
+        if server_key is None: server_key = key
+        req = Batch.constructUnifiedRequest(('DEL', key))
         return self._execute_simple((req,), server_key, timeout_ms)
     
     def mget(self, *keys, **kwargs):

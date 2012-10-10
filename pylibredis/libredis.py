@@ -302,7 +302,7 @@ class Redis(object):
                 if retryCount < 0:
                     raise ex
         
-    def setex(self, key, expire, value):
+    def setex(self, key, value, expire):
         return self.set(key, value, expire)
         
     def set(self, key, value, expire = None, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):

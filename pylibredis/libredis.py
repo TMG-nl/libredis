@@ -327,6 +327,11 @@ class Redis(object):
         if server_key is None: server_key = key
         req = Batch.constructUnifiedRequest(('DEL', key))
         return self._execute_simple((req,), server_key, timeout_ms)
+
+    def publish(self, channel, message, server_key = None, timeout_ms = DEFAULT_TIMEOUT_MS):
+        if server_key is None: server_key = channel
+        req = Batch.constructUnifiedRequest(('PUBLISH', channel, message))
+        return self._execute_simple((req,), server_key, timeout_ms)
     
     def mget(self, *keys, **kwargs):
         timeout_ms = kwargs.get('timeout_ms', DEFAULT_TIMEOUT_MS)

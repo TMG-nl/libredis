@@ -41,7 +41,7 @@ echo $connection->get('hello', 200); //get the value of key hello with a timeout
 //multi-set
 $batch = $libredis->create_batch();
 $batch->set('hello', 'world');
-$batch->set('hello2', 'world2';
+$batch->set('hello2', 'world2');
 $batch->execute($connection, 200); //same as $connection->execute($batch, ...)
 //multi-get
 $batch = $libredis->create_batch();
